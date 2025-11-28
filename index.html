@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DebMa Breakout Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      background: radial-gradient(circle at center, #000015, #000);
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: white;
+      font-family: Poppins, sans-serif;
+      user-select: none;
+    }
+    
+    canvas {
+      background: rgba(0, 0, 0, 0.8);
+      border: 2px solid #0ff;
+      border-radius: 20px;
+      box-shadow: 0 0 20px #0ff;
+    }
+    
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-size: 2rem;
+      background: rgba(0, 0, 0, 0.6);
+      flex-direction: column;
+    }
+    
+    button {
+      margin-top: 15px;
+      padding: 10px 25px;
+      font-size: 1.2rem;
+      background: none;
+      color: #0ff;
+      border: 2px solid #0ff;
+      border-radius: 10px;
+      transition: 0.2s;
+    }
+    
+    button:active {
+      transform: scale(0.9);
+    }
+    
+    @keyframes glow {
+
+      0%,
+      100% {
+        text-shadow: 0 0 8px #0ff, 0 0 15px #0ff;
+      }
+      
+      50% {
+        text-shadow: 0 0 15px #00f, 0 0 25px #0ff;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="gameCanvas" width="380" height="600"></canvas>
+  <div id="overlay" style="display:flex;">
+    <h1 style="animation:glow 2s infinite;">🔥 DebMa Breakout 🔥</h1>
+    <button id="startBtn">Start Game</button>
+  </div>
+  
+  <audio id="hitSound" src="https://cdn.jsdelivr.net/gh/jshawl/AudioFX/sounds/blip.wav"></audio>
+  <audio id="loseSound" src="https://cdn.jsdelivr.net/gh/jshawl/AudioFX/sounds/error.wav"></audio>
+  <audio id="winSound" src="https://cdn.jsdelivr.net/gh/jshawl/AudioFX/sounds/powerUp.wav"></audio>
+  
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const startBtn = document.getElementById('startBtn');
+    
+    let paddle = { x: canvas.width / 2 - 40, y: canvas.height - 20, w: 80, h: 10, speed: 8 };
+    let ball = { x: canvas.width / 2, y: canvas.height - 40, r: 8, dx: 3, dy: -3 };
+    let bricks = [],
+      rows = 5,
+      cols = 6,
+      brickW = 55,
+      brickH = 20,
+      gap = 5;
+    let score = 0,
+      level = 1,
+      lives = 3,
+      playing = false;
+    const hitSound = document.getElementById('hitSound');
+    const loseSound = document.getElementById('loseSound');
+    const winSound = document.getElementById('winSound');
+    
+    function initBricks() {
+      bricks = [];
+      const numRange = level === 1 ? [1, 10] : [10, 20];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = 20 + c * (brickW + gap);
+          const y = 40 + r * (brickH + gap);
+          const num = Math.floor(Math.random() * (numRange[1] - numRange[0] + 1)) + numRange[0];
+          bricks.push({ x, y, w: brickW, h: brickH, num });
+        }
+      }
+    }
+    
+    function drawPaddle() {
+      ctx.fillStyle = "#0ff";
+      ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
+    }
+    
+    function drawBall() {
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff";
+      ctx.shadowColor = "#0ff";
+      ctx.shadowBlur = 15;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.closePath();
+    }
+    
+    function drawBricks() {
+      bricks.forEach(b => {
+        ctx.fillStyle = `hsl(${b.num*15},100%,50%)`;
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.strokeStyle = "#fff";
+        ctx.strokeRect(b.x, b.y, b.w, b.h);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 16px Poppins";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.shadowColor = "#0ff";
+        ctx.shadowBlur = 8;
+        ctx.fillText(b.num, b.x + b.w / 2, b.y + b.h / 2);
+        ctx.shadowBlur = 0;
+      });
+    }
+    
+    function drawInfo() {
+      ctx.fillStyle = "#0ff";
+      ctx.font = "14px Poppins";
+      ctx.fillText("Score: " + score, 10, 15);
+      ctx.fillText("Level: " + level, 150, 15);
+      ctx.fillText("❤️".repeat(lives), 300, 15);
+    }
+    
+    function resetBall() {
+      ball.x = canvas.width / 2;
+      ball.y = canvas.height - 40;
+      ball.dx = 3 * (Math.random() < 0.5 ? -1 : 1);
+      ball.dy = -3;
+    }
+    
+    function update() {
+      if (!playing) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBricks();
+      drawPaddle();
+      drawBall();
+      drawInfo();
+      
+      ball.x += ball.dx;
+      ball.y += ball.dy;
+      
+      if (ball.x + ball.r > canvas.width || ball.x - ball.r < 0) ball.dx *= -1;
+      if (ball.y - ball.r < 0) ball.dy *= -1;
+      
+      if (ball.y + ball.r > paddle.y && ball.x > paddle.x && ball.x < paddle.x + paddle.w) {
+        ball.dy *= -1;
+        hitSound.currentTime = 0;
+        hitSound.play();
+      }
+      
+      // Brick hit
+      bricks.forEach((b, i) => {
+        if (ball.x > b.x && ball.x < b.x + b.w && ball.y > b.y && ball.y < b.y + b.h) {
+          ball.dy *= -1;
+          b.num--;
+          hitSound.currentTime = 0;
+          hitSound.play();
+          if (b.num <= 0) {
+            bricks.splice(i, 1);
+            score += 10;
+          }
+        }
+      });
+      
+      // Missed ball
+      if (ball.y > canvas.height) {
+        lives--;
+        loseSound.play();
+        if (lives <= 0) {
+          gameOver();
+        } else {
+          playing = false;
+          resetBall();
+          showMessage("Tap to Continue");
+        }
+      }
+      
+      // Level clear
+      if (bricks.length === 0) {
+        winSound.play();
+        level++;
+        if (level > 2) {
+          showMessage("🎉 You Won All Levels 🎉");
+          playing = false;
+        } else {
+          initBricks();
+          resetBall();
+          playing = false;
+          showMessage("Level " + level + " Ready — Tap to Start");
+        }
+      }
+      
+      requestAnimationFrame(update);
+    }
+    
+    function showMessage(msg) {
+      overlay.style.display = "flex";
+      overlay.innerHTML = `<h2 style="animation:glow 2s infinite;">${msg}</h2>
+  <button onclick="startGame()">Start</button>`;
+    }
+    
+    function startGame() {
+      overlay.style.display = "none";
+      playing = true;
+      requestAnimationFrame(update);
+    }
+    
+    function gameOver() {
+      overlay.style.display = "flex";
+      overlay.innerHTML = `<h2 style="animation:glow 2s infinite;">💀 Game Over 💀<br>Score: ${score}</h2>
+  <button onclick="restartGame()">Restart</button>`;
+    }
+    
+    function restartGame() {
+      score = 0;
+      level = 1;
+      lives = 3;
+      initBricks();
+      resetBall();
+      overlay.style.display = "none";
+      playing = true;
+      requestAnimationFrame(update);
+    }
+    
+    canvas.addEventListener('touchmove', e => {
+      const touch = e.touches[0];
+      let x = touch.clientX - canvas.getBoundingClientRect().left;
+      paddle.x = x - paddle.w / 2;
+      if (paddle.x < 0) paddle.x = 0;
+      if (paddle.x + paddle.w > canvas.width) paddle.x = canvas.width - paddle.w;
+    });
+    
+    startBtn.onclick = () => {
+      initBricks();
+      resetBall();
+      overlay.style.display = "none";
+      playing = true;
+      requestAnimationFrame(update);
+    };
+  </script>
+</body>
+
+</html>
